@@ -8,6 +8,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"http.xlkv.io/internal/headers"
 )
 
 type parserState int
@@ -15,6 +17,7 @@ type parserState int
 const (
 	requestStateInitialized parserState = iota
 	requestStateDone
+	requestStateParsingHeaders
 )
 
 var methods = []string{
@@ -27,6 +30,7 @@ var methods = []string{
 
 type Request struct {
 	RequestLine RequestLine
+	Headers     headers.Headers
 	state       parserState
 }
 
@@ -44,6 +48,8 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 			RequestTarget: "",
 			Method:        "",
 		},
+		state:   requestStateInitialized,
+		Headers: headers.NewHeaders(),
 	}
 
 	buf := make([]byte, 8)
@@ -57,6 +63,9 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 		readSize, err := reader.Read(buf[readToIndex:])
 		if err != nil {
 			if errors.Is(err, io.EOF) {
+				if request.state != requestStateDone {
+					return nil, fmt.Errorf("reqeust format error")
+				}
 				break
 			}
 			return nil, err
@@ -76,7 +85,23 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 }
 
 func (r *Request) parse(data []byte) (int, error) {
-	if r.state == requestStateInitialized {
+	countParsedBytes := 0
+	for r.state != requestStateDone {
+		n, err := r.parseSingle(data[countParsedBytes:])
+		if err != nil {
+			return 0, err
+		}
+		if n == 0 {
+			break
+		}
+		countParsedBytes += n
+	}
+	return countParsedBytes, nil
+}
+
+func (r *Request) parseSingle(data []byte) (int, error) {
+	switch r.state {
+	case requestStateInitialized:
 		requestLine, size, err := parseRequestLine(data)
 		if err != nil {
 			return 0, err
@@ -85,7 +110,19 @@ func (r *Request) parse(data []byte) (int, error) {
 			return 0, nil
 		}
 		r.RequestLine = requestLine
-		r.state = requestStateDone
+		r.state = requestStateParsingHeaders
+		return size, nil
+	case requestStateParsingHeaders:
+		size, done, err := r.Headers.Parse(data)
+		if err != nil {
+			return 0, err
+		}
+		if size == 0 {
+			return 0, nil
+		}
+		if done {
+			r.state = requestStateDone
+		}
 		return size, nil
 	}
 	return 0, fmt.Errorf("state is not initilized.")

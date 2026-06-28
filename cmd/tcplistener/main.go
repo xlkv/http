@@ -1,18 +1,16 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
-	"io"
 	"net"
-	"strconv"
-	"strings"
+
+	"http.xlkv.io/internal/request"
 )
 
 func main() {
 	listner, err := net.Listen("tcp", ":42069")
 	if err != nil {
-		fmt.Println("Something went wrong with tcp connection.")
+		fmt.Println("Something went wrong with tcp connection:", err)
 		return
 	}
 	defer listner.Close()
@@ -23,69 +21,79 @@ func main() {
 			fmt.Println("something wrong with accept!")
 			break
 		}
-		ch := readParams(conn)
-		for data := range ch {
-			fmt.Println(data)
+		req, err := request.RequestFromReader(conn)
+		if err != nil {
+			conn.Write([]byte(err.Error()))
+			return
+		}
+		fmt.Println("Request line:")
+		fmt.Println("- Method:", req.RequestLine.Method)
+		fmt.Println("- Target:", req.RequestLine.RequestTarget)
+		fmt.Println("- Version:", req.RequestLine.HttpVersion)
+		fmt.Println("Headers:")
+		for key, value := range req.Headers {
+			str := fmt.Sprintf("- %v: %v", key, value)
+			fmt.Println(str)
 		}
 	}
 }
 
-func readParams(f io.ReadCloser) <-chan string {
+// func readParams(f io.ReadCloser) <-chan string {
 
-	ch := make(chan string)
+// 	ch := make(chan string)
 
-	go func() {
-		defer close(ch)
-		defer f.Close()
-		buffer := make([]byte, 8)
+// 	go func() {
+// 		defer close(ch)
+// 		defer f.Close()
+// 		buffer := make([]byte, 8)
 
-		var data []byte
+// 		var data []byte
 
-		for true {
-			size, err := f.Read(buffer)
+// 		for true {
+// 			size, err := f.Read(buffer)
 
-			if err != nil {
-				fmt.Println("something went wrong with reading data from conn.")
-				return
-			}
+// 			if err != nil {
+// 				fmt.Println("something went wrong with reading data from conn.")
+// 				return
+// 			}
 
-			data = append(data, buffer[:size]...)
+// 			data = append(data, buffer[:size]...)
 
-			headersBytes, bodyBytes, ok := bytes.Cut(data, []byte("\r\n\r\n"))
+// 			headersBytes, bodyBytes, ok := bytes.Cut(data, []byte("\r\n\r\n"))
 
-			if !ok {
-				continue
-			}
+// 			if !ok {
+// 				continue
+// 			}
 
-			contentLength := 0
+// 			contentLength := 0
 
-			headers := strings.Split(string(headersBytes), "\r\n")
+// 			headers := strings.Split(string(headersBytes), "\r\n")
 
-			for _, header := range headers {
-				parts := strings.Split(header, ": ")
-				if len(parts) != 2 {
-					continue
-				}
-				if parts[0] == "Content-Length" {
-					contentLength, err = strconv.Atoi(parts[1])
-				}
-			}
-			if len(bodyBytes) < contentLength {
-				continue
-			}
+// 			for _, header := range headers {
+// 				parts := strings.Split(header, ": ")
+// 				if len(parts) != 2 {
+// 					continue
+// 				}
+// 				if parts[0] == "Content-Length" {
+// 					contentLength, err = strconv.Atoi(parts[1])
+// 				}
+// 			}
+// 			if len(bodyBytes) < contentLength {
+// 				continue
+// 			}
 
-			for _, header := range headers {
-				ch <- header
-			}
+// 			for _, header := range headers {
+// 				ch <- header
+// 			}
 
-			ch <- string(bodyBytes[:contentLength])
-			return
-		}
+// 			ch <- string(bodyBytes[:contentLength])
+// 			return
+// 		}
 
-	}()
+// 	}()
 
-	return ch
-}
+// 	return ch
+// }
 
 // func bodyReadChan(f io.ReadCloser) (string, <-chan string) {
 // 	buffer := make([]byte, 4096)
