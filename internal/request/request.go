@@ -63,6 +63,9 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 		}
 		readToIndex += readSize
 		parsedSize, err := request.parse(buf[:readToIndex])
+		if err != nil {
+			return nil, err
+		}
 		if parsedSize > 0 {
 			copy(buf, buf[parsedSize:readToIndex])
 			readToIndex -= parsedSize
@@ -90,11 +93,13 @@ func (r *Request) parse(data []byte) (int, error) {
 
 func parseRequestLine(data []byte) (RequestLine, int, error) {
 
-	if bytes.Contains(data, []byte("\r\n")) {
+	idx := bytes.Index(data, []byte("\r\n"))
+
+	if idx == -1 {
 		return RequestLine{}, 0, nil
 	}
 
-	parts := bytes.Split(data, []byte(" "))
+	parts := bytes.Split(data[:idx], []byte(" "))
 
 	if len(parts) <= 2 {
 		return RequestLine{}, 0, fmt.Errorf("request format is error.")
@@ -131,5 +136,5 @@ func parseRequestLine(data []byte) (RequestLine, int, error) {
 
 	requestLine.HttpVersion = versionParts[1]
 
-	return requestLine, len(data), nil
+	return requestLine, len(data[:idx+2]), nil
 }
