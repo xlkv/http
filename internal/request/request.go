@@ -18,6 +18,7 @@ const (
 	requestStateInitialized parserState = iota
 	requestStateDone
 	requestStateParsingHeaders
+	requestStateParsingBody
 )
 
 var methods = []string{
@@ -31,6 +32,7 @@ var methods = []string{
 type Request struct {
 	RequestLine RequestLine
 	Headers     headers.Headers
+	Body        []byte
 	state       parserState
 }
 
@@ -121,9 +123,27 @@ func (r *Request) parseSingle(data []byte) (int, error) {
 			return 0, nil
 		}
 		if done {
-			r.state = requestStateDone
+			r.state = requestStateParsingBody
 		}
 		return size, nil
+	case requestStateParsingBody:
+		length, ok := r.Headers.Get("Content-Length")
+		if !ok {
+			r.state = requestStateDone
+			return 0, nil
+		}
+		contentLength, err := strconv.Atoi(length)
+		if err != nil {
+			return 0, fmt.Errorf("content length error")
+		}
+		r.Body = append(r.Body, data...)
+		if len(r.Body) == contentLength {
+			r.state = requestStateDone
+		}
+		if len(r.Body) > contentLength {
+			return 0, fmt.Errorf("content length error")
+		}
+		return len(data), nil
 	}
 	return 0, fmt.Errorf("state is not initilized.")
 }

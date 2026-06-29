@@ -35,6 +35,8 @@ func main() {
 			str := fmt.Sprintf("- %v: %v", key, value)
 			fmt.Println(str)
 		}
+		fmt.Println("Body:")
+		fmt.Println(string(req.Body))
 	}
 }
 
