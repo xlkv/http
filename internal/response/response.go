@@ -16,41 +16,76 @@ const (
 	ServerError StatusCode = 500
 )
 
+type writeState int
+
+const (
+	stateStatusLine writeState = iota
+	stateHeaders
+	stateBody
+)
+
+type Writer struct {
+	writer io.Writer
+	state  writeState
+}
+
+func NewWriter(w io.Writer) *Writer {
+	return &Writer{
+		writer: w,
+		state:  stateStatusLine,
+	}
+}
+
+func (w *Writer) WriteStatusLine(statusCode StatusCode) error {
+	if w.state != stateStatusLine {
+		return fmt.Errorf("state not init.")
+	}
+	statusMessage, ok := StatusMessages[statusCode]
+	if ok {
+		statusLine := fmt.Sprintf("%v\r\n", statusMessage)
+		w.writer.Write([]byte(statusLine))
+		w.state = stateHeaders
+		return nil
+	}
+	return fmt.Errorf("Unknown status code")
+}
+func (w *Writer) WriteHeaders(headers headers.Headers) error {
+	if w.state != stateHeaders {
+		return fmt.Errorf("state error")
+	}
+	for key, value := range headers {
+		header := fmt.Sprintf("%v: %v\r\n", key, value)
+		_, err := w.writer.Write([]byte(header))
+		if err != nil {
+			return err
+		}
+	}
+	_, err := w.writer.Write([]byte("\r\n"))
+	w.state = stateBody
+	if err != nil {
+		return err
+	}
+	return err
+}
+func (w *Writer) WriteBody(p []byte) (int, error) {
+	if w.state != stateBody {
+		return 0, fmt.Errorf("state error")
+	}
+	n, err := w.writer.Write(p)
+
+	return n, err
+}
+
 var StatusMessages = map[StatusCode]string{
 	OK:          "HTTP/1.1 200 OK",
 	BadRequest:  "HTTP/1.1 400 Bad Request",
 	ServerError: "HTTP/1.1 500 Internal Server Error",
 }
 
-func WriteHeaders(w io.Writer, headers headers.Headers) error {
-	for key, value := range headers {
-		header := fmt.Sprintf("%v: %v\r\n", key, value)
-		_, err := w.Write([]byte(header))
-		if err != nil {
-			return err
-		}
-	}
-	_, err := w.Write([]byte("\r\n"))
-	if err != nil {
-		return err
-	}
-	return fmt.Errorf("headers is empty")
-}
-
-func GetDefaultHeaders(contentLen int) headers.Headers {
+func (w *Writer) GetDefaultHeaders(contentLen int) headers.Headers {
 	return headers.Headers{
-		"Content-Length": strconv.Itoa(contentLen),
-		"Connection":     "close",
-		"Content-Type":   "text/plain",
+		"content-length": strconv.Itoa(contentLen),
+		"connection":     "close",
+		"content-type":   "text/plain",
 	}
-}
-
-func WriteStatusLine(w io.Writer, statusCode StatusCode) error {
-	statusMessage, ok := StatusMessages[statusCode]
-	if ok {
-		statusLine := fmt.Sprintf("%v\r\n", statusMessage)
-		w.Write([]byte(statusLine))
-		return nil
-	}
-	return fmt.Errorf("Unknown status code")
 }

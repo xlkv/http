@@ -1,8 +1,6 @@
 package server
 
 import (
-	"bytes"
-	"io"
 	"net"
 	"strconv"
 	"sync/atomic"
@@ -22,13 +20,13 @@ type HandlerError struct {
 	Message    string
 }
 
-func (err HandlerError) Error(w io.Writer) (int, error) {
-	response.WriteStatusLine(w, err.StatusCode)
-	response.WriteHeaders(w, response.GetDefaultHeaders(len(err.Message)))
-	return w.Write([]byte(err.Message))
+func (err HandlerError) Error(w response.Writer) (int, error) {
+	w.WriteStatusLine(err.StatusCode)
+	w.WriteHeaders(w.GetDefaultHeaders(len(err.Message)))
+	return w.WriteBody([]byte(err.Message))
 }
 
-type Handler func(w io.Writer, req *request.Request) *HandlerError
+type Handler func(w *response.Writer, req *request.Request)
 
 func (s *Server) listen() {
 	for {
@@ -43,22 +41,13 @@ func (s *Server) listen() {
 
 func (s *Server) handle(conn net.Conn) {
 	defer conn.Close()
-	buf := bytes.NewBuffer([]byte{})
+	writer := response.NewWriter(conn)
 	request, err := request.RequestFromReader(conn)
 	if err != nil {
-		response.WriteStatusLine(conn, response.BadRequest)
+		writer.WriteStatusLine(response.BadRequest)
 		return
 	}
-	handlerErr := s.Handler(buf, request)
-	if handlerErr != nil {
-		handlerErr.Error(conn)
-		return
-	}
-	b := buf.Bytes()
-	headers := response.GetDefaultHeaders(len(b))
-	response.WriteStatusLine(conn, response.OK)
-	response.WriteHeaders(conn, headers)
-	conn.Write(b)
+	s.Handler(writer, request)
 }
 
 func (s *Server) Close() error {

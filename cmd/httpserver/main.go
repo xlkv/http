@@ -1,13 +1,13 @@
 package main
 
 import (
-	"io"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"http.xlkv.io/internal/request"
+	"http.xlkv.io/internal/response"
 	"http.xlkv.io/internal/server"
 )
 
@@ -15,21 +15,53 @@ const port = 42069
 
 func main() {
 
-	var handler = func(w io.Writer, req *request.Request) *server.HandlerError {
+	var handler = func(w *response.Writer, req *request.Request) {
 		switch req.RequestLine.RequestTarget {
 		case "/yourproblem":
-			return &server.HandlerError{
-				StatusCode: 400,
-				Message:    "Your problem is not my problem\n",
-			}
+			body := []byte(`<html>
+							  <head>
+							    <title>400 Bad Request</title>
+							  </head>
+							  <body>
+							    <h1>Bad Request</h1>
+							    <p>Your request honestly kinda sucked.</p>
+							  </body>
+							</html>`)
+			w.WriteStatusLine(response.BadRequest)
+			headers := w.GetDefaultHeaders(len(body))
+			headers.Override("Content-Type", "text/html")
+			w.WriteHeaders(headers)
+			w.WriteBody(body)
 		case "/myproblem":
-			return &server.HandlerError{
-				StatusCode: 500,
-				Message:    "Woopsie, my bad\n",
-			}
+			body := []byte(`<html>
+								  <head>
+								    <title>500 Internal Server Error</title>
+								  </head>
+								  <body>
+								    <h1>Internal Server Error</h1>
+								    <p>Okay, you know what? This one is on me.</p>
+								  </body>
+								</html>`)
+			w.WriteStatusLine(response.ServerError)
+			headers := w.GetDefaultHeaders(len(body))
+			headers.Override("Content-Type", "text/html")
+			w.WriteHeaders(headers)
+			w.WriteBody(body)
 		default:
-			w.Write([]byte("All good, frfr\n"))
-			return nil
+			body := []byte(`<html>
+							  <head>
+							    <title>200 OK</title>
+							  </head>
+							  <body>
+							    <h1>Success!</h1>
+							    <p>Your request was an absolute banger.</p>
+							  </body>
+							</html>`)
+			w.WriteStatusLine(response.OK)
+			headers := w.GetDefaultHeaders(len(body))
+			headers.Override("Content-Type", "text/html")
+			w.WriteHeaders(headers)
+			w.WriteBody(body)
 		}
 	}
 
