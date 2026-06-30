@@ -64,7 +64,11 @@ func (h Headers) Get(key string) (string, bool) {
 }
 
 func (h Headers) Override(key, value string) {
-    h[strings.ToLower(key)] = value 
+	h[strings.ToLower(key)] = value
+}
+
+func (h Headers) Delete(key string) {
+	delete(h, key)
 }
 
 func isValidFieldName(name string) bool {

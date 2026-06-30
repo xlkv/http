@@ -1,9 +1,14 @@
 package main
 
 import (
+	"errors"
+	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"http.xlkv.io/internal/request"
@@ -48,6 +53,30 @@ func main() {
 			w.WriteHeaders(headers)
 			w.WriteBody(body)
 		default:
+			if strings.HasPrefix(req.RequestLine.RequestTarget, "/httpbin") {
+				baseURL := "https://httpbin.org"
+				reqUrl := fmt.Sprintf("%v%v", baseURL, strings.TrimPrefix(req.RequestLine.RequestTarget, "/httpbin"))
+				w.WriteStatusLine(response.OK)
+				headers := w.GetDefaultHeaders(0)
+				headers.Delete("content-length")
+				headers["transfer-encoding"] = "chunked"
+				w.WriteHeaders(headers)
+				buf := make([]byte, 1024)
+				resp, err := http.Get(reqUrl)
+				if err != nil {
+					return
+				}
+				for {
+					n, err := resp.Body.Read(buf)
+					if err != nil {
+						if errors.Is(err, io.EOF) {
+							w.WriteChunkedBodyDone()
+							return
+						}
+					}
+					w.WriteChunkedBody(buf[:n])
+				}
+			}
 			body := []byte(`<html>
 							  <head>
 							    <title>200 OK</title>

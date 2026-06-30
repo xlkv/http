@@ -76,6 +76,24 @@ func (w *Writer) WriteBody(p []byte) (int, error) {
 	return n, err
 }
 
+func (w *Writer) WriteChunkedBody(p []byte) (int, error) {
+	if w.state != stateBody {
+		return 0, fmt.Errorf("state error")
+	}
+	chunkSize := fmt.Sprintf("%x\r\n", len(p))
+	w.WriteBody([]byte(chunkSize))
+	n, err := w.WriteBody([]byte(p))
+	w.WriteBody([]byte("\r\n"))
+	return n, err
+}
+
+func (w *Writer) WriteChunkedBodyDone() (int, error) {
+	if w.state != stateBody {
+		return 0, fmt.Errorf("state error")
+	}
+	return w.WriteBody([]byte("0\r\n\r\n"))
+}
+
 var StatusMessages = map[StatusCode]string{
 	OK:          "HTTP/1.1 200 OK",
 	BadRequest:  "HTTP/1.1 400 Bad Request",
