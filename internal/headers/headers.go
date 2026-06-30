@@ -71,6 +71,10 @@ func (h Headers) Delete(key string) {
 	delete(h, key)
 }
 
+func (h Headers) Add(key string, value string) {
+	h[key] = value
+}
+
 func isValidFieldName(name string) bool {
 	if len(name) == 0 {
 		return false

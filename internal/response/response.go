@@ -22,6 +22,7 @@ const (
 	stateStatusLine writeState = iota
 	stateHeaders
 	stateBody
+	stateTrailers
 )
 
 type Writer struct {
@@ -91,7 +92,23 @@ func (w *Writer) WriteChunkedBodyDone() (int, error) {
 	if w.state != stateBody {
 		return 0, fmt.Errorf("state error")
 	}
-	return w.WriteBody([]byte("0\r\n\r\n"))
+	n, err := w.WriteBody([]byte("0\r\n"))
+	w.state = stateTrailers
+	return n, err
+}
+
+func (w *Writer) WriteTrailers(trailers headers.Headers) (int, error) {
+	if w.state != stateTrailers {
+		return 0, fmt.Errorf("state error")
+	}
+	for key, value := range trailers {
+		trailer := fmt.Sprintf("%v: %v\r\n", key, value)
+		n, err := w.writer.Write([]byte(trailer))
+		if err != nil {
+			return n, err
+		}
+	}
+	return w.writer.Write([]byte("\r\n"))
 }
 
 var StatusMessages = map[StatusCode]string{
